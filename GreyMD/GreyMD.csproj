@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>favicon.ico</ApplicationIcon>
+    <StartupObject>GreyMD.App</StartupObject>
+    <Description>暗盘行情接收</Description>
+    <Company>华盛证券</Company>
+    <Authors>Qiusheng</Authors>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <Copyright>本产品归属华盛证券</Copyright>
+  </PropertyGroup>
+
+</Project>
