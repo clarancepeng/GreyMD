@@ -10,7 +10,11 @@
     <Company>华盛证券</Company>
     <Authors>Qiusheng</Authors>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-    <Copyright>本产品归属华盛证券</Copyright>
+    <Copyright>华盛证券©</Copyright>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Collections" Version="4.3.0" />
+  </ItemGroup>
 
 </Project>

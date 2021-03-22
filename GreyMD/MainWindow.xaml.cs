@@ -17,10 +17,11 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
-using System.Windows.Shapes;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Data;
+using System.Reflection;
+using System.IO;
 
 namespace GreyMD
 {
@@ -32,10 +33,12 @@ namespace GreyMD
         ObservableCollection<AggOrderBook> aggOrderBooks = new ObservableCollection<AggOrderBook>();
         ObservableCollection<TradeData> tradeDatas = new ObservableCollection<TradeData>();
         ObservableCollection<BrokerQueuRow> brokerQueueDatas = new ObservableCollection<BrokerQueuRow>();
+        AggOrderBookCache bookCache = new AggOrderBookCache();
         private int subSecurityId;
         private bool addListener = false;
         public void clean()
         {
+            
             aggOrderBooks.Clear();
             aggOrderBooks.Add(new AggOrderBook(" 1"));
             aggOrderBooks.Add(new AggOrderBook(" 2"));
@@ -81,6 +84,7 @@ namespace GreyMD
             brokerQueueDatas.Add(new BrokerQueuRow());
             brokerQueueDatas.Add(new BrokerQueuRow());
             brokerQueueDatas.Add(new BrokerQueuRow());
+            bookCache.Clean();
         }
         public MainWindow()
         {
@@ -89,6 +93,8 @@ namespace GreyMD
             orderBookGrid.DataContext = aggOrderBooks;
             // tradeView.ItemsSource = tradeDatas;
             brokerQueueGrid.DataContext = brokerQueueDatas;
+            //var config = new ConfigurationBuilder().SetBasePath(Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location))
+            //.AddJsonFile("appsetting.json").Build();
         }
 
         MulticastUdpClient udpClientWrapper;
@@ -103,6 +109,7 @@ namespace GreyMD
             {
 
             }
+            bookCache.Clean();
             // Create address objects
             int port = Int32.Parse(txtPort.Text);
             IPAddress multicastIPaddress = IPAddress.Parse(txtRemoteIP.Text);
@@ -112,7 +119,7 @@ namespace GreyMD
             udpClientWrapper = new MulticastUdpClient(multicastIPaddress, port, localIPaddress);
             udpClientWrapper.UdpMessageReceived += OnUdpMessageReceived;
 
-            subSecurityId = Int16.Parse(txtSecurityCode.Text);
+            subSecurityId = Int32.Parse(txtSecurityCode.Text);
             AddToLog("MarketData Client started");
         }
 
@@ -146,6 +153,17 @@ namespace GreyMD
             }
         }
 
+        string formatBroker(short broker)
+        {
+            if(broker == 0)
+            {
+                return "0";
+            } else
+            {
+                return "" + broker;
+            }
+        }
+
         /// <summary>
         /// UDP Message received event
         /// </summary>
@@ -160,6 +178,7 @@ namespace GreyMD
             short msgSize = BitConverter.ToInt16(e.Buffer, 16);
             short msgType = BitConverter.ToInt16(e.Buffer, 18);
             int securityCode = BitConverter.ToInt32(e.Buffer, 20);
+
             if(subSecurityId != securityCode)
             {
                 return;
@@ -168,34 +187,89 @@ namespace GreyMD
             switch (msgType)
             {
                 case 53:
+                    byte updateType = e.Buffer[24];
                     byte noEntries = e.Buffer[27];
-                    AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
-                    for(var i = 0; i < noEntries; i++)
+                    if (updateType == 1)
                     {
-                        int offset = 28 + 24 * i;
-                        long qty = BitConverter.ToInt64(e.Buffer, offset);
-                        int price = BitConverter.ToInt32(e.Buffer, offset + 8);
-                        int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
-                        short side = BitConverter.ToInt16(e.Buffer, offset + 16);
-                        byte priceLevel = e.Buffer[offset + 18];
-                        byte updateAction = e.Buffer[offset + 19];
-                        AggOrderBook book = aggOrderBooks[priceLevel - 1];
-                        if (side == 1)
+                        for (var i = 0; i < noEntries; i++)
                         {
-                            //AddToLog("买" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
-                            book.BidPx = price / 1000.0;
-                            book.BidQty = formatQty(qty);
-                            book.BidOrders = "(" + orderCount + ")";
-                        } else
-                        {
-                            // AddToLog("卖" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
-                            book.OfferPx = price / 1000.0;
-                            book.OfferQty = formatQty(qty);
-                            book.OfferOrders = "(" + orderCount + ")";
+                            int offset = 28 + 24 * i;
+                            long qty = BitConverter.ToInt64(e.Buffer, offset);
+                            int price = BitConverter.ToInt32(e.Buffer, offset + 8);
+                            int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
+                            short side = BitConverter.ToInt16(e.Buffer, offset + 16);
+                            byte priceLevel = e.Buffer[offset + 18];
+                            byte updateAction = e.Buffer[offset + 19];
+                            break; // donothing
+                            if (updateAction == 74)
+                            {
+                                for(int n = 0; n < 10; n++)
+                                {
+                                    AggOrderBook book = aggOrderBooks[n];
+                                    if (side == 0)
+                                    {
+                                        //AddToLog("买" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
+                                        //AddToLog("Buy " + n + " Clean");
+                                        book.BidPx = 0;
+                                        book.BidQty = formatQty(0);
+                                        book.BidOrders = "(" + 0 + ")";
+                                    }
+                                    else
+                                    {
+                                        // AddToLog("卖" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
+                                        //AddToLog("Sell " + n + " Clean");
+                                        book.OfferPx = 0;
+                                        book.OfferQty = formatQty(0);
+                                        book.OfferOrders = "(" + 0 + ")";
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                AggOrderBook book = aggOrderBooks[i % 10];
+                                if (side == 0)
+                                {
+                                    //AddToLog("买" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
+                                    book.BidPx = price / 1000.0;
+                                    book.BidQty = formatQty(qty);
+                                    book.BidOrders = "(" + orderCount + ")";
+                                }
+                                else
+                                {
+                                    // AddToLog("卖" + priceLevel + " " + (price / 1000.0) + " " + qty + "(" + orderCount + ")");
+                                    book.OfferPx = price / 1000.0;
+                                    book.OfferQty = formatQty(qty);
+                                    book.OfferOrders = "(" + orderCount + ")";
+                                }
+
+                            }
                         }
-                        
-                        
                     }
+                    else
+                    {
+                        for (var i = 0; i < noEntries; i++)
+                        {
+                            int offset = 28 + 24 * i;
+                            long qty = BitConverter.ToInt64(e.Buffer, offset);
+                            int price = BitConverter.ToInt32(e.Buffer, offset + 8);
+                            int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
+                            short side = BitConverter.ToInt16(e.Buffer, offset + 16);
+                            byte priceLevel = e.Buffer[offset + 18];
+                            byte updateAction = e.Buffer[offset + 19];
+                            if(side == 0)
+                            {
+                                bookCache.UpdateBid(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                            } else
+                            {
+                                bookCache.UpdateAsk(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                            }
+                            
+                        }
+                            // UpdateBid(int securityCode, int orders, int price, int qty, byte priceLevel, byte updateAction, ObservableCollection < AggOrderBook > aggOrderBooks)
+                        }
+                    
+                    AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
+                    
                     break;
                 case 50:
                     {
@@ -259,16 +333,16 @@ namespace GreyMD
                             switch(col)
                             {
                                 case 0:
-                                    rowData.BidBQ1 = item;
+                                    rowData.BidBQ1 = formatBroker(item);
                                     break;
                                 case 1:
-                                    rowData.BidBQ2 = item;
+                                    rowData.BidBQ2 = formatBroker(item);
                                     break;
                                 case 2:
-                                    rowData.BidBQ3 = item;
+                                    rowData.BidBQ3 = formatBroker(item);
                                     break;
                                 case 3:
-                                    rowData.BidBQ4 = item;
+                                    rowData.BidBQ4 = formatBroker(item);
                                     break;
                             }
                         } else
@@ -276,16 +350,16 @@ namespace GreyMD
                             switch (col)
                             {
                                 case 0:
-                                    rowData.OfferBQ1 = item;
+                                    rowData.OfferBQ1 = formatBroker(item);
                                     break;
                                 case 1:
-                                    rowData.OfferBQ2 = item;
+                                    rowData.OfferBQ2 = formatBroker(item);
                                     break;
                                 case 2:
-                                    rowData.OfferBQ3 = item;
+                                    rowData.OfferBQ3 = formatBroker(item);
                                     break;
                                 case 3:
-                                    rowData.OfferBQ4 = item;
+                                    rowData.OfferBQ4 = formatBroker(item);
                                     break;
                             }
                         }
@@ -304,16 +378,16 @@ namespace GreyMD
                                 switch (col)
                                 {
                                     case 0:
-                                        rowData.BidBQ1 = 0;
+                                        rowData.BidBQ1 = "";
                                         break;
                                     case 1:
-                                        rowData.BidBQ2 = 0;
+                                        rowData.BidBQ2 = "";
                                         break;
                                     case 2:
-                                        rowData.BidBQ3 = 0;
+                                        rowData.BidBQ3 = "";
                                         break;
                                     case 3:
-                                        rowData.BidBQ4 = 0;
+                                        rowData.BidBQ4 = "";
                                         break;
                                 }
                             }
@@ -322,16 +396,16 @@ namespace GreyMD
                                 switch (col)
                                 {
                                     case 0:
-                                        rowData.OfferBQ1 = 0;
+                                        rowData.OfferBQ1 = "";
                                         break;
                                     case 1:
-                                        rowData.OfferBQ2 = 0;
+                                        rowData.OfferBQ2 = "";
                                         break;
                                     case 2:
-                                        rowData.OfferBQ3 = 0;
+                                        rowData.OfferBQ3 = "";
                                         break;
                                     case 3:
-                                        rowData.OfferBQ4 = 0;
+                                        rowData.OfferBQ4 = "";
                                         break;
                                 }
                             }
@@ -417,274 +491,4 @@ namespace GreyMD
             }
         }
     }
-
-
-    public class BrokerQueuRow : INotifyPropertyChanged
-    {
-        private short bidBQ1;
-        private short bidBQ2;
-        private short bidBQ3;
-        private short bidBQ4;
-
-        private short offerBQ1;
-        private short offerBQ2;
-        private short offerBQ3;
-        private short offerBQ4;
-
-        public short BidBQ1
-        {
-            get { return bidBQ1; }
-            set
-            {
-                if (bidBQ1 != value)
-                {
-                    bidBQ1 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidBQ1"));
-                }
-            }
-        }
-
-        public short BidBQ2
-        {
-            get { return bidBQ2; }
-            set
-            {
-                if (bidBQ2 != value)
-                {
-                    bidBQ2 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidBQ2"));
-                }
-            }
-        }
-
-        public short BidBQ3
-        {
-            get { return bidBQ3; }
-            set
-            {
-                if (bidBQ3 != value)
-                {
-                    bidBQ3 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidBQ3"));
-                }
-            }
-        }
-
-        public short BidBQ4
-        {
-            get { return bidBQ4; }
-            set
-            {
-                if (bidBQ4 != value)
-                {
-                    bidBQ4 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidBQ4"));
-                }
-            }
-        }
-
-
-        public short OfferBQ1
-        {
-            get { return offerBQ1; }
-            set
-            {
-                if (offerBQ1 != value)
-                {
-                    offerBQ1 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferBQ1"));
-                }
-            }
-        }
-
-        public short OfferBQ2
-        {
-            get { return offerBQ2; }
-            set
-            {
-                if (offerBQ2 != value)
-                {
-                    offerBQ2 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferBQ2"));
-                }
-            }
-        }
-
-        public short OfferBQ3
-        {
-            get { return offerBQ3; }
-            set
-            {
-                if (offerBQ3 != value)
-                {
-                    offerBQ3 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferBQ3"));
-                }
-            }
-        }
-
-        public short OfferBQ4
-        {
-            get { return offerBQ4; }
-            set
-            {
-                if (offerBQ4 != value)
-                {
-                    offerBQ4 = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferBQ4"));
-                }
-            }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged = delegate { };
-    }
-    public class TradeData : INotifyPropertyChanged
-    {
-        private double price;
-        private String quantity;
-        private String tradeTime;
-
-        public double Price
-        {
-            get { return price; }
-            set
-            {
-                if (price != value)
-                {
-                    price = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("Price"));
-                }
-            }
-        }
-
-        public String Quantity
-        {
-            get { return quantity; }
-            set
-            {
-                if (quantity != value)
-                {
-                    quantity = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("Quantity"));
-                }
-            }
-        }
-
-        public String TradeTime
-        {
-            get { return tradeTime; }
-            set
-            {
-                if (tradeTime != value)
-                {
-                    tradeTime = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("TradeTime"));
-                }
-            }
-        }
-
-
-        public event PropertyChangedEventHandler PropertyChanged = delegate { };
-    }
-
-    public class AggOrderBook : INotifyPropertyChanged
-    {
-        private double bidPx;
-        private String bidQty;
-        private String bidOrdes;
-        private double offerPx;
-        private String offerQty;
-        private String offerOrdes;
-
-        public AggOrderBook(String level)
-        {
-            this.Level = level;
-        }
-        public double BidPx
-        {
-            get { return bidPx; }
-            set
-            {
-                if (bidPx != value)
-                {
-                    bidPx = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidPx"));
-                }
-            }
-        }
-
-        public String BidQty
-        {
-            get { return bidQty; }
-            set
-            {
-                if (bidQty != value)
-                {
-                    bidQty = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidQty"));
-                }
-            }
-        }
-
-
-        public String BidOrders
-        {
-            get { return bidOrdes; }
-            set
-            {
-                if (bidOrdes != value)
-                {
-                    bidOrdes = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("BidOrders"));
-                }
-            }
-        }
-
-        public String Level { get; set; }
-
-        // public double OfferPx { get; set; }
-        public double OfferPx
-        {
-            get { return offerPx; }
-            set
-            {
-                if (offerPx != value)
-                {
-                    offerPx = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferPx"));
-                }
-            }
-        }
-
-        public String OfferQty
-        {
-            get { return offerQty; }
-            set
-            {
-                if (offerQty != value)
-                {
-                    offerQty = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferQty"));
-                }
-            }
-        }
-
-
-        public String OfferOrders
-        {
-            get { return offerOrdes; }
-            set
-            {
-                if (offerOrdes != value)
-                {
-                    offerOrdes = value;
-                    PropertyChanged(this, new PropertyChangedEventArgs("OfferOrders"));
-                }
-            }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged = delegate { };
-    }
-
-
 }

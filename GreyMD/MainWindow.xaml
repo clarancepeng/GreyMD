@@ -63,10 +63,10 @@
                         </Style>
                     </DataGrid.Resources>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Bid" Width="50" Binding="{Binding BidBQ1, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ2, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ3, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ4, StringFormat=0;;#}"/>
+                        <DataGridTextColumn Header="Bid" Width="50" Binding="{Binding BidBQ1}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ2}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ3}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding BidBQ4}"/>
                         <DataGridTextColumn Header=" " Width="50" >
                             <DataGridTextColumn.CellStyle>
                                 <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
@@ -74,10 +74,10 @@
                                 </Style>
                             </DataGridTextColumn.CellStyle>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Header="Ask" Width="50" Binding="{Binding OfferBQ1, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ2, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ3, StringFormat=0;;#}"/>
-                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ4, StringFormat=0;;#}"/>
+                        <DataGridTextColumn Header="Ask" Width="50" Binding="{Binding OfferBQ1}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ2}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ3}"/>
+                        <DataGridTextColumn Header=" " Width="50" Binding="{Binding OfferBQ4}"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </StackPanel>
