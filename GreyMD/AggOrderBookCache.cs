@@ -58,7 +58,8 @@ namespace GreyMD
             }
             if (bidPriceQtys.Count > 0)
             {
-                int[] prx = SpreadTableUtils.getBidPxLevel10(securityCode, bidPriceQtys.Last().Key);
+                int bid1 = bidPriceQtys.Last().Key;
+                int[] prx = SpreadTableUtils.getBidPxLevel10(securityCode, bid1);
                 if (prx != null)
                 {
                     for (int n = 0; n < prx.Length; n++)
@@ -71,7 +72,11 @@ namespace GreyMD
                             {
                                 aggOrderBooks[n].BidQty = FormatQty(qty);
                                 aggOrderBooks[n].BidOrders = "(" + orders + ")";
-                                break;
+                                if (price != bid1)
+                                {
+                                    break;
+                                }
+                                
                             }
                         }
                         else
@@ -150,7 +155,8 @@ namespace GreyMD
             }
             if(askPriceQtys.Count > 0)
             {
-                int[] prx = SpreadTableUtils.getAskPxLevel10(securityCode, askPriceQtys.First().Key);
+                int ask1 = askPriceQtys.First().Key;
+                int[] prx = SpreadTableUtils.getAskPxLevel10(securityCode, ask1);
                 if(prx != null)
                 {
                     for(int n = 0; n < prx.Length; n++)
@@ -163,7 +169,10 @@ namespace GreyMD
                             {
                                 aggOrderBooks[n].OfferQty = FormatQty(qty);
                                 aggOrderBooks[n].OfferOrders = "(" + orders + ")";
-                                break;
+                                if (price != ask1)
+                                {
+                                    break;
+                                }
                             }
                         }
                         else

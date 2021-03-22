@@ -183,6 +183,7 @@ namespace GreyMD
             {
                 return;
             }
+
             DateTime now = DateTime.Now;
             switch (msgType)
             {
@@ -200,10 +201,11 @@ namespace GreyMD
                             short side = BitConverter.ToInt16(e.Buffer, offset + 16);
                             byte priceLevel = e.Buffer[offset + 18];
                             byte updateAction = e.Buffer[offset + 19];
-                            break; // donothing
+                             // donothing
+                            
                             if (updateAction == 74)
                             {
-                                for(int n = 0; n < 10; n++)
+                                for (int n = 0; n < 10; n++)
                                 {
                                     AggOrderBook book = aggOrderBooks[n];
                                     if (side == 0)
@@ -226,6 +228,15 @@ namespace GreyMD
                             }
                             else
                             {
+                                if (side == 0)
+                                {
+                                    bookCache.UpdateBid(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                                }
+                                else
+                                {
+                                    bookCache.UpdateAsk(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                                }
+                                /*
                                 AggOrderBook book = aggOrderBooks[i % 10];
                                 if (side == 0)
                                 {
@@ -240,136 +251,78 @@ namespace GreyMD
                                     book.OfferPx = price / 1000.0;
                                     book.OfferQty = formatQty(qty);
                                     book.OfferOrders = "(" + orderCount + ")";
-                                }
+                                }*/
 
                             }
                         }
                     }
                     else
                     {
-                        for (var i = 0; i < noEntries; i++)
-                        {
-                            int offset = 28 + 24 * i;
-                            long qty = BitConverter.ToInt64(e.Buffer, offset);
-                            int price = BitConverter.ToInt32(e.Buffer, offset + 8);
-                            int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
-                            short side = BitConverter.ToInt16(e.Buffer, offset + 16);
-                            byte priceLevel = e.Buffer[offset + 18];
-                            byte updateAction = e.Buffer[offset + 19];
-                            if(side == 0)
+                        try {
+                            for (var i = 0; i < noEntries; i++)
                             {
-                                bookCache.UpdateBid(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
-                            } else
-                            {
-                                bookCache.UpdateAsk(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                                int offset = 28 + 24 * i;
+                                long qty = BitConverter.ToInt64(e.Buffer, offset);
+                                int price = BitConverter.ToInt32(e.Buffer, offset + 8);
+                                int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
+                                short side = BitConverter.ToInt16(e.Buffer, offset + 16);
+                                byte priceLevel = e.Buffer[offset + 18];
+                                byte updateAction = e.Buffer[offset + 19];
+                                if (side == 0)
+                                {
+                                    bookCache.UpdateBid(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                                } else
+                                {
+                                    bookCache.UpdateAsk(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
+                                }
+
                             }
-                            
-                        }
                             // UpdateBid(int securityCode, int orders, int price, int qty, byte priceLevel, byte updateAction, ObservableCollection < AggOrderBook > aggOrderBooks)
+                        } catch
+                        {
+                            AddToLog("Except when handle Aggregate OrderBook");
                         }
+                    }
                     
                     AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
                     
                     break;
                 case 50:
                     {
-                        int tradeID = BitConverter.ToInt32(e.Buffer, 24);
-                        double price = BitConverter.ToInt32(e.Buffer, 28) / 1000.0;
-                        int quantity = BitConverter.ToInt32(e.Buffer, 32);
-                        long tradeTime = BitConverter.ToInt64(e.Buffer, 40) / 1_000_000 + 28_800_000;
-                        if (tradeTime > 0)
+                        try
                         {
-                            /*
-                            TradeData tradeData = new TradeData();
-                            tradeData.Price = price;
-                            tradeData.Quantity = formatQty(quantity);
-                            DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
-                            tradeData.TradeTime = dtOffset.DateTime.ToString("HH:mm:ss.SSS");
-                            tradeDatas.Add(tradeData);
-                            */
-                            /*
-                            for(var i = 19; i > 1; i++)
+                            int tradeID = BitConverter.ToInt32(e.Buffer, 24);
+                            double price = BitConverter.ToInt32(e.Buffer, 28) / 1000.0;
+                            int quantity = BitConverter.ToInt32(e.Buffer, 32);
+                            long tradeTime = BitConverter.ToInt64(e.Buffer, 40) / 1_000_000 + 28_800_000;
+                            if (tradeTime > 0)
                             {
-                                TradeData t1 = tradeDatas[i-1];
-                                TradeData t2 = tradeDatas[i];
-                                t2.TradeTime = t1.TradeTime;
-                                t2.Quantity = t1.Quantity;
-                                t2.Price = t1.Price;
+                            
+                                    DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
+                                    string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
+                                    AddTrade(txtTrade);
+                            
+
                             }
-                            
-
-
-                            TradeData t0 = new TradeData(); // tradeDatas[0];
-                            t0.Price = price;
-                            t0.Quantity = formatQty(quantity);
-                            DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
-                            t0.TradeTime = dtOffset.DateTime.ToString("HH:mm:ss.SSS");
-                            tradeDatas.Add(t0);
-                            AddToLog(t0.TradeTime + " " + (price / 1000.0) + " " + t0.Quantity + " " + tradeDatas.Count());
-                            */
-                            DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
-                            string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
-                            AddTrade(txtTrade);
-                            
-
+                        }
+                        catch
+                        {
+                            AddToLog("Except when handle Trade");
                         }
                     }
                     
                     break;
                 case 54:
-                    byte itemCount = e.Buffer[24];
-                    short side2 = BitConverter.ToInt16(e.Buffer, 25);
-                    char bqMoreFlag = (char)e.Buffer[27];
-                    for(var n = 0; n < itemCount; n++)
+                    try
                     {
-                        int offset = 28 + 4 * n;
-                        short item = BitConverter.ToInt16(e.Buffer, offset);
-                        char type = (char)e.Buffer[offset + 2];
-                        int row = n / 4;
-                        int col = n % 4;
-                        BrokerQueuRow rowData = brokerQueueDatas[row];
-                        if(side2 == 1)
+                        byte itemCount = e.Buffer[24];
+                        short side2 = BitConverter.ToInt16(e.Buffer, 25);
+                        char bqMoreFlag = (char)e.Buffer[27];
+                        for (var n = 0; n < itemCount; n++)
                         {
-                            switch(col)
-                            {
-                                case 0:
-                                    rowData.BidBQ1 = formatBroker(item);
-                                    break;
-                                case 1:
-                                    rowData.BidBQ2 = formatBroker(item);
-                                    break;
-                                case 2:
-                                    rowData.BidBQ3 = formatBroker(item);
-                                    break;
-                                case 3:
-                                    rowData.BidBQ4 = formatBroker(item);
-                                    break;
-                            }
-                        } else
-                        {
-                            switch (col)
-                            {
-                                case 0:
-                                    rowData.OfferBQ1 = formatBroker(item);
-                                    break;
-                                case 1:
-                                    rowData.OfferBQ2 = formatBroker(item);
-                                    break;
-                                case 2:
-                                    rowData.OfferBQ3 = formatBroker(item);
-                                    break;
-                                case 3:
-                                    rowData.OfferBQ4 = formatBroker(item);
-                                    break;
-                            }
-                        }
-                    }
-
-                    if (itemCount < 40)
-                    {
-                        
-                        for (var n = itemCount; n < 40; n++)
-                        {
+                            int offset = 28 + 4 * n;
+                            short item = BitConverter.ToInt16(e.Buffer, offset);
+                            char type = (char)e.Buffer[offset + 2];
                             int row = n / 4;
                             int col = n % 4;
                             BrokerQueuRow rowData = brokerQueueDatas[row];
@@ -378,16 +331,16 @@ namespace GreyMD
                                 switch (col)
                                 {
                                     case 0:
-                                        rowData.BidBQ1 = "";
+                                        rowData.BidBQ1 = formatBroker(item);
                                         break;
                                     case 1:
-                                        rowData.BidBQ2 = "";
+                                        rowData.BidBQ2 = formatBroker(item);
                                         break;
                                     case 2:
-                                        rowData.BidBQ3 = "";
+                                        rowData.BidBQ3 = formatBroker(item);
                                         break;
                                     case 3:
-                                        rowData.BidBQ4 = "";
+                                        rowData.BidBQ4 = formatBroker(item);
                                         break;
                                 }
                             }
@@ -396,21 +349,88 @@ namespace GreyMD
                                 switch (col)
                                 {
                                     case 0:
-                                        rowData.OfferBQ1 = "";
+                                        rowData.OfferBQ1 = formatBroker(item);
                                         break;
                                     case 1:
-                                        rowData.OfferBQ2 = "";
+                                        rowData.OfferBQ2 = formatBroker(item);
                                         break;
                                     case 2:
-                                        rowData.OfferBQ3 = "";
+                                        rowData.OfferBQ3 = formatBroker(item);
                                         break;
                                     case 3:
-                                        rowData.OfferBQ4 = "";
+                                        rowData.OfferBQ4 = formatBroker(item);
                                         break;
                                 }
                             }
                         }
 
+                        if (itemCount < 40)
+                        {
+
+                            for (var n = itemCount; n < 40; n++)
+                            {
+                                int row = n / 4;
+                                int col = n % 4;
+                                BrokerQueuRow rowData = brokerQueueDatas[row];
+                                if (side2 == 1)
+                                {
+                                    switch (col)
+                                    {
+                                        case 0:
+                                            rowData.BidBQ1 = "";
+                                            break;
+                                        case 1:
+                                            rowData.BidBQ2 = "";
+                                            break;
+                                        case 2:
+                                            rowData.BidBQ3 = "";
+                                            break;
+                                        case 3:
+                                            rowData.BidBQ4 = "";
+                                            break;
+                                    }
+                                }
+                                else
+                                {
+                                    switch (col)
+                                    {
+                                        case 0:
+                                            rowData.OfferBQ1 = "";
+                                            break;
+                                        case 1:
+                                            rowData.OfferBQ2 = "";
+                                            break;
+                                        case 2:
+                                            rowData.OfferBQ3 = "";
+                                            break;
+                                        case 3:
+                                            rowData.OfferBQ4 = "";
+                                            break;
+                                    }
+                                }
+                            }
+
+                        }
+                    } catch
+                    {
+                        AddToLog("Exception when handle Broker Queue.");
+                        string hex = "";
+                        for (int i = 0; i < msgLen; i++)
+                        {
+                            if (i % 16 == 0)
+                            {
+                                hex += "\n";
+                            }
+                            int d = e.Buffer[i];
+                            if (d < 16)
+                            {
+                                hex += "0";
+                            }
+                            hex += d.ToString("x") + " ";
+
+
+                        }
+                        AddToLog("Hex Data: \n" + hex);
                     }
                     break;
             }
