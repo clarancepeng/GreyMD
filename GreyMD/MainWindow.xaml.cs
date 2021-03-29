@@ -22,6 +22,8 @@ using System.ComponentModel;
 using System.Data;
 using System.Reflection;
 using System.IO;
+using System.Diagnostics;
+using System.Configuration;
 
 namespace GreyMD
 {
@@ -36,6 +38,8 @@ namespace GreyMD
         AggOrderBookCache bookCache = new AggOrderBookCache();
         private int subSecurityId;
         private bool addListener = false;
+        private readonly NLog.Logger _log = NLog.LogManager.GetCurrentClassLogger();
+
         public void clean()
         {
             
@@ -93,8 +97,22 @@ namespace GreyMD
             orderBookGrid.DataContext = aggOrderBooks;
             // tradeView.ItemsSource = tradeDatas;
             brokerQueueGrid.DataContext = brokerQueueDatas;
-            //var config = new ConfigurationBuilder().SetBasePath(Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location))
-            //.AddJsonFile("appsetting.json").Build();
+
+            Process currentProcess = Process.GetCurrentProcess();
+            int pid = currentProcess.Id;
+            _log.Info($" ============= Main ================== pid: {pid}, process name: {currentProcess.ProcessName}");
+            string subIP = ConfigurationManager.AppSettings["SubscribeIP"];
+            string subPort = ConfigurationManager.AppSettings["SubscribePort"];
+            string subSecurityCode = ConfigurationManager.AppSettings["SubscribeSecurityCode"];
+            _log.Info("Subscribe IP={}", subIP);
+            AddToLog("Subscribe IP=" + subIP);
+            _log.Info("Subscribe Port={}", subPort);
+            AddToLog("Subscribe Port=" + subPort);
+            _log.Info("Subscribe Securitycode={}", subSecurityCode);
+            AddToLog("Subscribe SecurityCode=" + subSecurityCode);
+            txtRemoteIP.Text = subIP;
+            txtPort.Text = subPort;
+            txtSecurityCode.Text = subSecurityCode;
         }
 
         MulticastUdpClient udpClientWrapper;
@@ -110,17 +128,31 @@ namespace GreyMD
 
             }
             bookCache.Clean();
+
+            for (int n = 0; n < 10; n++)
+            {
+                AggOrderBook book = aggOrderBooks[n];
+                book.BidPx = 0;
+                book.BidQty = "0";
+                book.BidOrders = "(" + 0 + ")";
+                book.OfferPx = 0;
+                book.OfferQty = "0";
+                book.OfferOrders = "(" + 0 + ")";
+            }
             // Create address objects
             int port = Int32.Parse(txtPort.Text);
             IPAddress multicastIPaddress = IPAddress.Parse(txtRemoteIP.Text);
             IPAddress localIPaddress = IPAddress.Any;
 
+            _log.Info("Subscribe {} on {}@{}", txtSecurityCode.Text, txtRemoteIP.Text, txtPort.Text);
             // Create MulticastUdpClient
             udpClientWrapper = new MulticastUdpClient(multicastIPaddress, port, localIPaddress);
             udpClientWrapper.UdpMessageReceived += OnUdpMessageReceived;
 
             subSecurityId = Int32.Parse(txtSecurityCode.Text);
             AddToLog("MarketData Client started");
+            _log.Info("MarketData Client started");
+            NLog.LogManager.Flush();
         }
 
         int i = 1;
