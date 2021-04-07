@@ -138,6 +138,14 @@ namespace GreyMD
                 target[pos + i] = source[i];
             }
         }
+
+        private void Move(byte[] source, byte[] target, int pos, int len)
+        {
+            for (int i = 0; i < len; i++)
+            {
+                target[i] = source[pos + i];
+            }
+        }
         private void btnStart_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -178,10 +186,9 @@ namespace GreyMD
             int port = Int32.Parse(txtPort.Text);
             IPAddress remoteIPaddress = IPAddress.Parse(txtRemoteIP.Text);
             IPAddress localIPaddress = IPAddress.Any;
-
-            _log.Info("Subscribe {} on {}@{}", txtSecurityCode.Text, txtRemoteIP.Text, txtPort.Text);
-            // Create MulticastUdpClient
             ProtocolClass protocol = (ProtocolClass)txProtocol.SelectedValue;
+            _log.Info("Subscribe {0} on {1}://{2}@{3}", txtSecurityCode.Text, protocol.DisplayValue.ToLower(), txtRemoteIP.Text, txtPort.Text);
+            // Create MulticastUdpClient
             if(protocol.Value == 1)
             {
                 tcpMdClient = new TcpMdClient();
@@ -262,53 +269,59 @@ namespace GreyMD
             _log.Info("Get MarketData Message[len={0}]", e.Length);
             try
             {
-                _log.Info("11111");
+                if(e.Length == 0)
+                {
+                    return;
+                }
+                _log.Info("Got {} bytes", e.Length);
                 byte[] bufData;
                 int totalLen = 0;
                 if (bufPos == 0)
                 {
                     bufData = e.Buffer;
                     totalLen = e.Length;
-                    _log.Info("2222");
+                    //_log.Info("2222 without data left last time. ");
                 }
                 else
                 {
-                    _log.Info("33333");
+                    //_log.Info("33333 left bufLen={}", bufLen);
                     byte[] workBuf = new byte[4096];
                     copy(tempBuf, workBuf, 0, bufLen);
                     copy(e.Buffer, workBuf, bufLen, e.Length);
                     bufData = workBuf;
                     totalLen = bufLen + e.Length;
-                    _log.Info("44444");
+                    //_log.Info("44444 totalLen={}", totalLen);
                 }
                 bufPos = 0;
                 while (true)
                 {
-                    _log.Info("55555");
+                    //_log.Info("55555");
                     short pktSize = BitConverter.ToInt16(bufData, bufPos);
                     int leaves = totalLen - bufPos;
-                    _log.Info("66666");
+                    _log.Info("66666 pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
                     if (pktSize > leaves)
                     {
-                        _log.Info("77777");
+                        //_log.Info("77777");
                         copy(bufData, tempBuf, bufPos, leaves);
                         bufLen = leaves;
-                        _log.Info("88888");
+                        bufPos = 0;
+                        //_log.Info("88888");
                         break;
                     }
                     else
                     {
-                        _log.Info("99999 - pktSize={}, bufPos={}", pktSize, bufPos);
+                        _log.Info("99999 - pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
                         byte[] oneBuf = new byte[pktSize];
-                        copy(bufData, oneBuf, bufPos, pktSize);
-                        _log.Info("====11111");
+                        Move(bufData, oneBuf, bufPos, pktSize);
+                        //_log.Info("====11111");
                         OnMarketData(oneBuf, pktSize);
-                        _log.Info("====2222");
+                        //_log.Info("====2222");
                         bufPos += pktSize;
                     }
                     bufLen = 0;
                     if (totalLen - bufPos == 0)
                     {
+                        bufPos = 0;
                         break;
                     }
                 }
@@ -329,6 +342,7 @@ namespace GreyMD
             short msgType = BitConverter.ToInt16(bufData, 18);
             int securityCode = BitConverter.ToInt32(bufData, 20);
 
+            _log.Info("*** Got pktSize = {}, seqNum={}, msgType={}, securityCode={}", pktSize, seqNum, msgType, securityCode);
             if (subSecurityId != securityCode)
             {
                 return;
