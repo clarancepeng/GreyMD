@@ -1,27 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Data;
-using System.Reflection;
-using System.IO;
 using System.Diagnostics;
 using System.Configuration;
 
@@ -37,8 +21,35 @@ namespace GreyMD
         ObservableCollection<BrokerQueuRow> brokerQueueDatas = new ObservableCollection<BrokerQueuRow>();
         AggOrderBookCache bookCache = new AggOrderBookCache();
         private int subSecurityId;
-        private bool addListener = false;
         private readonly NLog.Logger _log = NLog.LogManager.GetCurrentClassLogger();
+        private MulticastUdpClient udpClientWrapper;
+        // private TcpMarketDataclient tcpMarketDataclient;
+        private TcpMdClient tcpMdClient;
+        private byte[] tempBuf;
+        private int bufPos;
+        private int bufLen;
+        public class ProtocolClass
+        {
+            public int Value { get; set; }
+            public string DisplayValue { get; set; }
+
+            public override string ToString()
+            {
+                return DisplayValue;
+            }
+        }
+
+        public ObservableCollection<ProtocolClass> ProtocolCollection
+        {
+            get
+            {
+                return new ObservableCollection<ProtocolClass>
+            {
+                new ProtocolClass{DisplayValue = "TCP", Value = 1},
+                new ProtocolClass{DisplayValue = "UDP", Value = 2},
+            };
+            }
+        }
 
         public void clean()
         {
@@ -113,15 +124,39 @@ namespace GreyMD
             txtRemoteIP.Text = subIP;
             txtPort.Text = subPort;
             txtSecurityCode.Text = subSecurityCode;
+            txProtocol.ItemsSource = ProtocolCollection;
+            txProtocol.SelectedIndex = 0;
+            tempBuf = new byte[4096];
+            bufPos = 0;
+            bufLen = 0;
         }
 
-        MulticastUdpClient udpClientWrapper;
-
+        private void copy(byte[] source, byte[] target, int pos, int len)
+        {
+            for(int i = 0; i < len; i++)
+            {
+                target[pos + i] = source[i];
+            }
+        }
         private void btnStart_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                udpClientWrapper.UdpMessageReceived -= OnUdpMessageReceived;
+                if (udpClientWrapper != null)
+                {
+                    udpClientWrapper.UdpMessageReceived -= OnUdpMessageReceived;
+                    udpClientWrapper = null;
+                }
+                /*
+                if(tcpMarketDataclient != null)
+                {
+                    tcpMarketDataclient.TcpMessageReceived -= OnTcpMessageReceived;
+                    tcpMarketDataclient = null;
+                }*/
+                if(tcpMdClient != null)
+                {
+                    tcpMdClient.TcpMDReceived -= OnTcpMessageReceived;
+                }
             }
             catch
             {
@@ -141,13 +176,39 @@ namespace GreyMD
             }
             // Create address objects
             int port = Int32.Parse(txtPort.Text);
-            IPAddress multicastIPaddress = IPAddress.Parse(txtRemoteIP.Text);
+            IPAddress remoteIPaddress = IPAddress.Parse(txtRemoteIP.Text);
             IPAddress localIPaddress = IPAddress.Any;
 
             _log.Info("Subscribe {} on {}@{}", txtSecurityCode.Text, txtRemoteIP.Text, txtPort.Text);
             // Create MulticastUdpClient
-            udpClientWrapper = new MulticastUdpClient(multicastIPaddress, port, localIPaddress);
-            udpClientWrapper.UdpMessageReceived += OnUdpMessageReceived;
+            ProtocolClass protocol = (ProtocolClass)txProtocol.SelectedValue;
+            if(protocol.Value == 1)
+            {
+                tcpMdClient = new TcpMdClient();
+                tcpMdClient.Initialize(txtRemoteIP.Text, port);
+                tcpMdClient.TcpMDReceived += OnTcpMessageReceived;
+                tcpMdClient.Receive();
+                byte[] logonBytes = new byte[92];
+                copy(BitConverter.GetBytes((ushort)92), logonBytes, 0, 2);
+                logonBytes[2] = 1;
+                copy(BitConverter.GetBytes(0), logonBytes, 4, 4);
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                long unixTimeMilliseconds = now.ToUnixTimeMilliseconds();
+                copy(BitConverter.GetBytes(unixTimeMilliseconds), logonBytes, 8, 8);
+                copy(BitConverter.GetBytes((ushort)76), logonBytes, 16, 2);
+                copy(BitConverter.GetBytes((ushort)101), logonBytes, 18, 2);
+
+                long userId = 9000;
+                copy(BitConverter.GetBytes(userId), logonBytes, 20, 8);
+                string password = "123456";
+                copy(Encoding.ASCII.GetBytes(password), logonBytes, 28, password.Length);
+                tcpMdClient.Send(logonBytes);
+                AddToLog("Logon to MarketData Server: " + userId + "");
+            } else
+            {
+                udpClientWrapper = new MulticastUdpClient(remoteIPaddress, port, localIPaddress);
+                udpClientWrapper.UdpMessageReceived += OnUdpMessageReceived;
+            }
 
             subSecurityId = Int32.Parse(txtSecurityCode.Text);
             AddToLog("MarketData Client started");
@@ -196,22 +257,79 @@ namespace GreyMD
             }
         }
 
-        /// <summary>
-        /// UDP Message received event
-        /// </summary>
-        void OnUdpMessageReceived(object sender, MulticastUdpClient.UdpMessageReceivedEventArgs e)
+        void OnTcpMessageReceived(object sender, TcpMdClient.TcpMDReceivedEventArgs e)
         {
-            //BitConverter.ToInt32(e.Buffer, 0);
-            short pktSize = BitConverter.ToInt16(e.Buffer, 0);
-            int seqNum = BitConverter.ToInt32(e.Buffer, 4);
-            long sendTime = BitConverter.ToInt64(e.Buffer, 8);
-            
-            int msgLen = e.Buffer.Length;
-            short msgSize = BitConverter.ToInt16(e.Buffer, 16);
-            short msgType = BitConverter.ToInt16(e.Buffer, 18);
-            int securityCode = BitConverter.ToInt32(e.Buffer, 20);
+            _log.Info("Get MarketData Message[len={0}]", e.Length);
+            try
+            {
+                _log.Info("11111");
+                byte[] bufData;
+                int totalLen = 0;
+                if (bufPos == 0)
+                {
+                    bufData = e.Buffer;
+                    totalLen = e.Length;
+                    _log.Info("2222");
+                }
+                else
+                {
+                    _log.Info("33333");
+                    byte[] workBuf = new byte[4096];
+                    copy(tempBuf, workBuf, 0, bufLen);
+                    copy(e.Buffer, workBuf, bufLen, e.Length);
+                    bufData = workBuf;
+                    totalLen = bufLen + e.Length;
+                    _log.Info("44444");
+                }
+                bufPos = 0;
+                while (true)
+                {
+                    _log.Info("55555");
+                    short pktSize = BitConverter.ToInt16(bufData, bufPos);
+                    int leaves = totalLen - bufPos;
+                    _log.Info("66666");
+                    if (pktSize > leaves)
+                    {
+                        _log.Info("77777");
+                        copy(bufData, tempBuf, bufPos, leaves);
+                        bufLen = leaves;
+                        _log.Info("88888");
+                        break;
+                    }
+                    else
+                    {
+                        _log.Info("99999 - pktSize={}, bufPos={}", pktSize, bufPos);
+                        byte[] oneBuf = new byte[pktSize];
+                        copy(bufData, oneBuf, bufPos, pktSize);
+                        _log.Info("====11111");
+                        OnMarketData(oneBuf, pktSize);
+                        _log.Info("====2222");
+                        bufPos += pktSize;
+                    }
+                    bufLen = 0;
+                    if (totalLen - bufPos == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                _log.Error("{}", ex.Message);
+            }
 
-            if(subSecurityId != securityCode)
+}
+
+        void OnMarketData(byte[] bufData, int msgLen)
+        {
+            short pktSize = BitConverter.ToInt16(bufData, 0);
+            int seqNum = BitConverter.ToInt32(bufData, 4);
+            long sendTime = BitConverter.ToInt64(bufData, 8);
+            short msgSize = BitConverter.ToInt16(bufData, 16);
+            short msgType = BitConverter.ToInt16(bufData, 18);
+            int securityCode = BitConverter.ToInt32(bufData, 20);
+
+            if (subSecurityId != securityCode)
             {
                 return;
             }
@@ -220,21 +338,21 @@ namespace GreyMD
             switch (msgType)
             {
                 case 53:
-                    byte updateType = e.Buffer[24];
-                    byte noEntries = e.Buffer[27];
+                    byte updateType = bufData[24];
+                    byte noEntries = bufData[27];
                     if (updateType == 1)
                     {
                         for (var i = 0; i < noEntries; i++)
                         {
                             int offset = 28 + 24 * i;
-                            long qty = BitConverter.ToInt64(e.Buffer, offset);
-                            int price = BitConverter.ToInt32(e.Buffer, offset + 8);
-                            int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
-                            short side = BitConverter.ToInt16(e.Buffer, offset + 16);
-                            byte priceLevel = e.Buffer[offset + 18];
-                            byte updateAction = e.Buffer[offset + 19];
-                             // donothing
-                            
+                            long qty = BitConverter.ToInt64(bufData, offset);
+                            int price = BitConverter.ToInt32(bufData, offset + 8);
+                            int orderCount = BitConverter.ToInt32(bufData, offset + 12);
+                            short side = BitConverter.ToInt16(bufData, offset + 16);
+                            byte priceLevel = bufData[offset + 18];
+                            byte updateAction = bufData[offset + 19];
+                            // donothing
+
                             if (updateAction == 74)
                             {
                                 for (int n = 0; n < 10; n++)
@@ -290,50 +408,53 @@ namespace GreyMD
                     }
                     else
                     {
-                        try {
+                        try
+                        {
                             for (var i = 0; i < noEntries; i++)
                             {
                                 int offset = 28 + 24 * i;
-                                long qty = BitConverter.ToInt64(e.Buffer, offset);
-                                int price = BitConverter.ToInt32(e.Buffer, offset + 8);
-                                int orderCount = BitConverter.ToInt32(e.Buffer, offset + 12);
-                                short side = BitConverter.ToInt16(e.Buffer, offset + 16);
-                                byte priceLevel = e.Buffer[offset + 18];
-                                byte updateAction = e.Buffer[offset + 19];
+                                long qty = BitConverter.ToInt64(bufData, offset);
+                                int price = BitConverter.ToInt32(bufData, offset + 8);
+                                int orderCount = BitConverter.ToInt32(bufData, offset + 12);
+                                short side = BitConverter.ToInt16(bufData, offset + 16);
+                                byte priceLevel = bufData[offset + 18];
+                                byte updateAction = bufData[offset + 19];
                                 if (side == 0)
                                 {
                                     bookCache.UpdateBid(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
-                                } else
+                                }
+                                else
                                 {
                                     bookCache.UpdateAsk(securityCode, orderCount, price, qty, priceLevel, updateAction, aggOrderBooks);
                                 }
 
                             }
                             // UpdateBid(int securityCode, int orders, int price, int qty, byte priceLevel, byte updateAction, ObservableCollection < AggOrderBook > aggOrderBooks)
-                        } catch
+                        }
+                        catch
                         {
                             AddToLog("Except when handle Aggregate OrderBook");
                         }
                     }
-                    
+
                     AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
-                    
+
                     break;
                 case 50:
                     {
                         try
                         {
-                            int tradeID = BitConverter.ToInt32(e.Buffer, 24);
-                            double price = BitConverter.ToInt32(e.Buffer, 28) / 1000.0;
-                            int quantity = BitConverter.ToInt32(e.Buffer, 32);
-                            long tradeTime = BitConverter.ToInt64(e.Buffer, 40) / 1_000_000 + 28_800_000;
+                            int tradeID = BitConverter.ToInt32(bufData, 24);
+                            double price = BitConverter.ToInt32(bufData, 28) / 1000.0;
+                            int quantity = BitConverter.ToInt32(bufData, 32);
+                            long tradeTime = BitConverter.ToInt64(bufData, 40) / 1_000_000 + 28_800_000;
                             if (tradeTime > 0)
                             {
-                            
-                                    DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
-                                    string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
-                                    AddTrade(txtTrade);
-                            
+
+                                DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
+                                string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
+                                AddTrade(txtTrade);
+
 
                             }
                         }
@@ -342,19 +463,19 @@ namespace GreyMD
                             AddToLog("Except when handle Trade");
                         }
                     }
-                    
+
                     break;
                 case 54:
                     try
                     {
-                        byte itemCount = e.Buffer[24];
-                        short side2 = BitConverter.ToInt16(e.Buffer, 25);
-                        char bqMoreFlag = (char)e.Buffer[27];
+                        byte itemCount = bufData[24];
+                        short side2 = BitConverter.ToInt16(bufData, 25);
+                        char bqMoreFlag = (char)bufData[27];
                         for (var n = 0; n < itemCount; n++)
                         {
                             int offset = 28 + 4 * n;
-                            short item = BitConverter.ToInt16(e.Buffer, offset);
-                            char type = (char)e.Buffer[offset + 2];
+                            short item = BitConverter.ToInt16(bufData, offset);
+                            char type = (char)bufData[offset + 2];
                             int row = n / 4;
                             int col = n % 4;
                             BrokerQueuRow rowData = brokerQueueDatas[row];
@@ -443,7 +564,8 @@ namespace GreyMD
                             }
 
                         }
-                    } catch
+                    }
+                    catch
                     {
                         AddToLog("Exception when handle Broker Queue.");
                         string hex = "";
@@ -453,7 +575,7 @@ namespace GreyMD
                             {
                                 hex += "\n";
                             }
-                            int d = e.Buffer[i];
+                            int d = bufData[i];
                             if (d < 16)
                             {
                                 hex += "0";
@@ -466,27 +588,13 @@ namespace GreyMD
                     }
                     break;
             }
-            /*
-            string hex="";
-            for (int i =0; i < msgLen; i++)
-            {
-                if (i % 16 == 0)
-                {
-                    hex += "\n";
-                }
-                int d = e.Buffer[i];
-                if(d < 16)
-                {
-                    hex += "0";
-                }
-                hex += d.ToString("x") + " ";
-                
-                
-            }
-            */
-            
-            // string receivedText = ASCIIEncoding.Unicode.GetString(e.Buffer);
-            //AddToLog("Received message: " + BitConverter.IsLittleEndian + " " + sod + " " + msgLen + "\n" + hex); //receivedText);
+        }
+        /// <summary>
+        /// UDP Message received event
+        /// </summary>
+        void OnUdpMessageReceived(object sender, MulticastUdpClient.UdpMessageReceivedEventArgs e)
+        {
+            OnMarketData(e.Buffer, e.Buffer.Length);
         }
 
         /// <summary>

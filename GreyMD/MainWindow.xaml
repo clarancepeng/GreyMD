@@ -9,10 +9,12 @@
     <Grid>
         <StackPanel>
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0" >
+                <Label Content="Protocol:" Margin="5,0,0,0" />
+                <ComboBox x:Name="txProtocol" Margin="0,0,0,0" ItemsSource="{Binding}" />
                 <Label Content="Remote IP:" Margin="5,0,0,0" />
-                <TextBox x:Name="txtRemoteIP" Text="239.255.27.1" Margin="0,0,0,0"/>
+                <TextBox x:Name="txtRemoteIP" Text="239.255.27.1" Margin="0,0,0,0" Width="120"/>
                 <Label Content="Port:" Margin="10,0,0,0"/>
-                <TextBox x:Name="txtPort" Text="8306"/>
+                <TextBox x:Name="txtPort" Text="8306" Width="40"/>
                 <Label Content="Security Code:" Margin="10,0,0,0"/>
                 <TextBox x:Name="txtSecurityCode" Width="100" Text="5"/>
             </StackPanel>
