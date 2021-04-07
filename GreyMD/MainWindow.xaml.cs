@@ -298,7 +298,7 @@ namespace GreyMD
                     //_log.Info("55555");
                     short pktSize = BitConverter.ToInt16(bufData, bufPos);
                     int leaves = totalLen - bufPos;
-                    _log.Info("66666 pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
+                    //_log.Info("66666 pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
                     if (pktSize > leaves)
                     {
                         //_log.Info("77777");
@@ -310,7 +310,7 @@ namespace GreyMD
                     }
                     else
                     {
-                        _log.Info("99999 - pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
+                        //_log.Info("99999 - pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
                         byte[] oneBuf = new byte[pktSize];
                         Move(bufData, oneBuf, bufPos, pktSize);
                         //_log.Info("====11111");
@@ -338,6 +338,11 @@ namespace GreyMD
             short pktSize = BitConverter.ToInt16(bufData, 0);
             int seqNum = BitConverter.ToInt32(bufData, 4);
             long sendTime = BitConverter.ToInt64(bufData, 8);
+            if(msgLen == 16)
+            {
+                _log.Info("Got Heart Beat");
+                return;
+            }
             short msgSize = BitConverter.ToInt16(bufData, 16);
             short msgType = BitConverter.ToInt16(bufData, 18);
             int securityCode = BitConverter.ToInt32(bufData, 20);
