@@ -33,5 +33,10 @@ namespace GreyMD
             // Apply config           
             NLog.LogManager.Configuration = config;
         }
+
+        private void Application_Exit(object sender, ExitEventArgs e)
+        {
+            System.Environment.Exit(0);
+        }
     }
 }

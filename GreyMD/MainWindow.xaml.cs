@@ -8,6 +8,8 @@ using System.Windows.Media;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Configuration;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace GreyMD
 {
@@ -20,14 +22,18 @@ namespace GreyMD
         ObservableCollection<TradeData> tradeDatas = new ObservableCollection<TradeData>();
         ObservableCollection<BrokerQueuRow> brokerQueueDatas = new ObservableCollection<BrokerQueuRow>();
         AggOrderBookCache bookCache = new AggOrderBookCache();
+        private Queue<TcpMdClient.TcpMDReceivedEventArgs> tcpMdQueue = new Queue<TcpMdClient.TcpMDReceivedEventArgs>(5000);
+        private Thread tcpHandle;
         private int subSecurityId;
         private readonly NLog.Logger _log = NLog.LogManager.GetCurrentClassLogger();
         private MulticastUdpClient udpClientWrapper;
         // private TcpMarketDataclient tcpMarketDataclient;
         private TcpMdClient tcpMdClient;
         private byte[] tempBuf;
+        private byte[] bufData;
         private int bufPos;
         private int bufLen;
+        private bool isRunning = true;
         public class ProtocolClass
         {
             public int Value { get; set; }
@@ -38,7 +44,6 @@ namespace GreyMD
                 return DisplayValue;
             }
         }
-
         public ObservableCollection<ProtocolClass> ProtocolCollection
         {
             get
@@ -126,9 +131,32 @@ namespace GreyMD
             txtSecurityCode.Text = subSecurityCode;
             txProtocol.ItemsSource = ProtocolCollection;
             txProtocol.SelectedIndex = 0;
-            tempBuf = new byte[4096];
+            tempBuf = new byte[2048];
+            bufData = new byte[4096];
             bufPos = 0;
             bufLen = 0;
+            
+            /*
+            tcpHandle = new Thread(() =>
+            {
+                while(isRunning)
+                {
+                    TcpMdClient.TcpMDReceivedEventArgs msgEvent;
+                    try
+                    {
+                        tcpMdQueue.TryDequeue(out msgEvent);
+                        if (msgEvent != null)
+                        {
+                            OnTcpMessage(msgEvent);
+                        }
+                    } catch(Exception e)
+                    {
+                        _log.Error("Error: {}", e.Message);
+                    }
+                }
+            });
+            tcpHandle.Start();
+            */
         }
 
         private void copy(byte[] source, byte[] target, int pos, int len)
@@ -267,29 +295,40 @@ namespace GreyMD
         void OnTcpMessageReceived(object sender, TcpMdClient.TcpMDReceivedEventArgs e)
         {
             _log.Info("Get MarketData Message[len={0}]", e.Length);
+            // tcpMdQueue.Enqueue(e);
+            OnTcpMessage(e);
+        }
+
+        void OnTcpMessage(TcpMdClient.TcpMDReceivedEventArgs e)
+        {
             try
             {
-                if(e.Length == 0)
+                if (e.Length == 0)
                 {
                     return;
                 }
                 _log.Info("Got {} bytes", e.Length);
-                byte[] bufData;
+                
                 int totalLen = 0;
-                if (bufPos == 0)
+                if (bufLen == 0)
                 {
-                    bufData = e.Buffer;
+                    //_log.Info("11111, Lenght={0}, bufLen={1}", e.Length, e.Buffer.Length);
+                    e.Buffer.CopyTo(bufData, 0);
                     totalLen = e.Length;
-                    //_log.Info("2222 without data left last time. ");
+                   //_log.Info("2222 without data left last time. ");
                 }
                 else
                 {
                     //_log.Info("33333 left bufLen={}", bufLen);
-                    byte[] workBuf = new byte[4096];
-                    copy(tempBuf, workBuf, 0, bufLen);
-                    copy(e.Buffer, workBuf, bufLen, e.Length);
-                    bufData = workBuf;
+                    //byte[] workBuf = new byte[8192];
+                    //copy(tempBuf, workBuf, 0, bufLen);
+                    //copy(e.Buffer, workBuf, bufLen, e.Length);
+                    //bufData = workBuf;
                     totalLen = bufLen + e.Length;
+                    copy(tempBuf, bufData, 0, bufLen);
+                    copy(e.Buffer, bufData, bufLen, e.Length);
+                    // tempBuf.CopyTo(bufData, 0);
+                    // e.Buffer.CopyTo(bufData, bufLen);
                     //_log.Info("44444 totalLen={}", totalLen);
                 }
                 bufPos = 0;
@@ -297,12 +336,18 @@ namespace GreyMD
                 {
                     //_log.Info("55555");
                     short pktSize = BitConverter.ToInt16(bufData, bufPos);
+                    if(pktSize == 0)
+                    {
+                        bufLen = 0;
+                        _log.Error("aaaaaaa");
+                        break;
+                    }
                     int leaves = totalLen - bufPos;
                     //_log.Info("66666 pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
                     if (pktSize > leaves)
                     {
                         //_log.Info("77777");
-                        copy(bufData, tempBuf, bufPos, leaves);
+                        Move(bufData, tempBuf, bufPos, leaves);
                         bufLen = leaves;
                         bufPos = 0;
                         //_log.Info("88888");
@@ -310,28 +355,32 @@ namespace GreyMD
                     }
                     else
                     {
-                        //_log.Info("99999 - pktSize={}, leaves={}, bufPos={}", pktSize, leaves, bufPos);
+                        //_log.Info("99999 - pktSize={}, leaves={}, bufPos={}, totalLen={}", pktSize, leaves, bufPos, totalLen);
                         byte[] oneBuf = new byte[pktSize];
                         Move(bufData, oneBuf, bufPos, pktSize);
                         //_log.Info("====11111");
                         OnMarketData(oneBuf, pktSize);
                         //_log.Info("====2222");
                         bufPos += pktSize;
+                        if(bufPos >= totalLen)
+                        {
+                            bufLen = 0;
+                            if(bufPos > totalLen)
+                            {
+                                _log.Error("bbbbb");
+                            }
+                            break;
+                        }
                     }
-                    bufLen = 0;
-                    if (totalLen - bufPos == 0)
-                    {
-                        bufPos = 0;
-                        break;
-                    }
+                    
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
-                _log.Error("{}", ex.Message);
+                _log.Error("Err: {}", ex.Message);
             }
 
-}
+        }
 
         void OnMarketData(byte[] bufData, int msgLen)
         {

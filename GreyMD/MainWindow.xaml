@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:GreyMD"
         mc:Ignorable="d"
-        Title="Market Data Subscriber" Height="750" Width="1250">
+        Title="Grey Market Data Subscriber" Height="750" Width="1250">
     <Grid>
         <StackPanel>
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0" >
