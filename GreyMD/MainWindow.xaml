@@ -35,8 +35,16 @@
                     </DataGrid.Columns>
                 </DataGrid>
                 <StackPanel Orientation="Vertical" Margin="10,0,0,0" Width="250" >
-                    <Label Content="Trade Detail:" />
+                    <!--<Label Content="Trade Detail:" />
                     <TextBox x:Name="txtTrade" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Hidden" Height="300"/>
+                    -->
+                    <DataGrid x:Name="tradeDetailGrid" ItemsSource="{Binding}" AutoGenerateColumns="False" GridLinesVisibility="None" SelectionUnit="FullRow" VerticalScrollBarVisibility="Visible" Height="200">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Price" Width="60" Binding="{Binding Price}"/>
+                        <DataGridTextColumn Header="Qty" Width="60" Binding="{Binding Quantity}"/>
+                        <DataGridTextColumn Header="TradeTime" Width="80" Binding="{Binding TradeTime}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </StackPanel>
                 <!--
                 <ListView x:Name="tradeView" Visibility="Hidden" Margin="10, 0, 0, 0" ItemsSource="{Binding}">

@@ -7,11 +7,11 @@ namespace GreyMD
 {
     public class TradeData : INotifyPropertyChanged
     {
-        private double price;
-        private String quantity;
-        private String tradeTime;
+        private string price;
+        private string quantity;
+        private string tradeTime;
 
-        public double Price
+        public string Price
         {
             get { return price; }
             set
@@ -24,7 +24,7 @@ namespace GreyMD
             }
         }
 
-        public String Quantity
+        public string Quantity
         {
             get { return quantity; }
             set
@@ -37,7 +37,7 @@ namespace GreyMD
             }
         }
 
-        public String TradeTime
+        public string TradeTime
         {
             get { return tradeTime; }
             set

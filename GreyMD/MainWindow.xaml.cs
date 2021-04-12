@@ -70,29 +70,12 @@ namespace GreyMD
             aggOrderBooks.Add(new AggOrderBook(" 8"));
             aggOrderBooks.Add(new AggOrderBook(" 9"));
             aggOrderBooks.Add(new AggOrderBook("10"));
-            /*
+
             tradeDatas.Clear();
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            tradeDatas.Add(new TradeData());
-            */
+            for(int i = 0; i < 100; i++)
+            {
+                tradeDatas.Add(new TradeData());
+            }
             brokerQueueDatas.Clear();
             brokerQueueDatas.Add(new BrokerQueuRow());
             brokerQueueDatas.Add(new BrokerQueuRow());
@@ -113,7 +96,7 @@ namespace GreyMD
             orderBookGrid.DataContext = aggOrderBooks;
             // tradeView.ItemsSource = tradeDatas;
             brokerQueueGrid.DataContext = brokerQueueDatas;
-
+            tradeDetailGrid.DataContext = tradeDatas;
             Process currentProcess = Process.GetCurrentProcess();
             int pid = currentProcess.Id;
             _log.Info($" ============= Main ================== pid: {pid}, process name: {currentProcess.ProcessName}");
@@ -505,7 +488,7 @@ namespace GreyMD
                         }
                     }
 
-                    AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
+                    // AddToLog("Received message: AggregateOrderBook[securityCode=" + securityCode + ", noEntries=" + noEntries + "] on " + now.ToString("HH:mm:ss.fff"));
 
                     break;
                 case 50:
@@ -520,10 +503,23 @@ namespace GreyMD
                             {
 
                                 DateTimeOffset dtOffset = DateTimeOffset.FromUnixTimeMilliseconds(tradeTime);
-                                string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
-                                AddTrade(txtTrade);
-
-
+                                // string txtTrade = dtOffset.DateTime.ToString("HH:mm:ss.fff") + " " + price.ToString("0.000") + " " + formatQty(quantity);
+                                //AddTrade(txtTrade);
+                                // tradeDatas.Add(new TradeData() { Price = price==0?"": price.ToString(), Quantity= formatQty(quantity), TradeTime= dtOffset.DateTime.ToString("HH:mm:ss.fff") }) ;
+                                // tradeDatas.RemoveAt(99);
+                                // tradeDatas.Insert(0, new TradeData() { Price = price == 0 ? "" : price.ToString(), Quantity = formatQty(quantity), TradeTime = dtOffset.DateTime.ToString("HH:mm:ss.fff") });
+                                for(int n = 99; n > 0; n--)
+                                {
+                                    TradeData t2 = tradeDatas[n];
+                                    TradeData t1 = tradeDatas[n-1];
+                                    t2.Price = t1.Price;
+                                    t2.Quantity = t1.Quantity;
+                                    t2.TradeTime = t1.TradeTime;
+                                }
+                                TradeData t = tradeDatas[0];
+                                t.Price = price == 0 ? "" : price.ToString();
+                                t.Quantity = formatQty(quantity);
+                                t.TradeTime = dtOffset.DateTime.ToString("HH:mm:ss.fff");
                             }
                         }
                         catch
@@ -684,7 +680,7 @@ namespace GreyMD
         {
             Dispatcher.BeginInvoke((Action)(() =>
             {
-                txtTrade.Text = s + Environment.NewLine + txtTrade.Text;
+                // txtTrade.Text = s + Environment.NewLine + txtTrade.Text;
                 /*
                 txtLog.Text += Environment.NewLine;
                 txtLog.Text += s;
