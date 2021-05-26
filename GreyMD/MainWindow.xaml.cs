@@ -33,6 +33,8 @@ namespace GreyMD
         private byte[] bufData;
         private int bufPos;
         private int bufLen;
+        private int mdUser;
+        private string mdPassword;
         private bool isRunning = true;
         public class ProtocolClass
         {
@@ -103,6 +105,8 @@ namespace GreyMD
             string subIP = ConfigurationManager.AppSettings["SubscribeIP"];
             string subPort = ConfigurationManager.AppSettings["SubscribePort"];
             string subSecurityCode = ConfigurationManager.AppSettings["SubscribeSecurityCode"];
+            mdUser = Int32.Parse(ConfigurationManager.AppSettings["MdUser"]);
+            mdPassword = ConfigurationManager.AppSettings["MdPassword"];
             _log.Info("Subscribe IP={}", subIP);
             AddToLog("Subscribe IP=" + subIP);
             _log.Info("Subscribe Port={}", subPort);
@@ -216,9 +220,9 @@ namespace GreyMD
                 copy(BitConverter.GetBytes((ushort)76), logonBytes, 16, 2);
                 copy(BitConverter.GetBytes((ushort)101), logonBytes, 18, 2);
 
-                long userId = 9000;
+                long userId = mdUser;
                 copy(BitConverter.GetBytes(userId), logonBytes, 20, 8);
-                string password = "123456";
+                string password = mdPassword;
                 copy(Encoding.ASCII.GetBytes(password), logonBytes, 28, password.Length);
                 tcpMdClient.Send(logonBytes);
                 AddToLog("Logon to MarketData Server: " + userId + "");
